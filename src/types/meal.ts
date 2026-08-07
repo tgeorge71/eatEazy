@@ -1,0 +1,59 @@
+export type BudgetTier = "low" | "medium" | "high";
+
+export type Constraints = {
+  dietaryRestrictions: string[];
+  allergies: string[];
+  budgetTier: BudgetTier;
+  maxCookTimeMinutes: number;
+  householdSize: number;
+  dislikedIngredients: string[];
+  preferredCuisines: string[];
+  avoidedCuisines: string[];
+};
+
+export const DEFAULT_CONSTRAINTS: Constraints = {
+  dietaryRestrictions: [],
+  allergies: [],
+  budgetTier: "medium",
+  maxCookTimeMinutes: 45,
+  householdSize: 2,
+  dislikedIngredients: [],
+  preferredCuisines: [],
+  avoidedCuisines: [],
+};
+
+export type MealSlotRequest = {
+  id: string;
+  label: string;
+};
+
+export type Ingredient = {
+  name: string;
+  quantity: string;
+};
+
+export type MealOption = {
+  id: string;
+  title: string;
+  description: string;
+  cookTimeMinutes: number;
+  cuisine: string;
+  tags: string[];
+  ingredients: Ingredient[];
+};
+
+export type SlotSuggestions = {
+  slotId: string;
+  options: MealOption[];
+};
+
+export type AcceptedMeal = {
+  slotId: string;
+  slotLabel: string;
+  meal: MealOption;
+};
+
+export type GroceryItem = {
+  name: string;
+  entries: { quantity: string; slotLabel: string }[];
+};
