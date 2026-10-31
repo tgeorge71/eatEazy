@@ -194,7 +194,8 @@ workout pagination, civil dates, and native/browser connection credential storag
 
 The app starts with **Sign in with Google**, using a backend OpenID Connect
 code flow with PKCE, single-use state, nonce checks, and Google's ID-token verifier.
-Login requests only `openid email profile`. Google Health permission is requested
+Login requests only `openid email profile`. **Sign up with email** and **Use phone number**
+are placeholders for now: they collect input but show "coming soon"; Google is the only working sign-in. Google Health permission is requested
 separately after login; **Continue to meal planning** skips the optional connection.
 The same Google account must be used for both steps. Workout sharing with Claude
 still requires its separate saved consent.

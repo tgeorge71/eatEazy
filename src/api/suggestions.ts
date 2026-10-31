@@ -2,6 +2,18 @@ import { sessionHeaders } from "@/api/googleHealth";
 import type { Goal, Nutrition, Workout } from "@/health/fitness";
 import { API_BASE_URL } from "@/config";
 import type { Constraints, MealSlotRequest, SlotSuggestions } from "@/types/meal";
+export function toApiConstraints(constraints: Constraints) {
+    return {
+        dietary_restrictions: constraints.dietaryRestrictions,
+        allergies: constraints.allergies,
+        budget_tier: constraints.budgetTier,
+        max_cook_time_minutes: constraints.maxCookTimeMinutes,
+        household_size: constraints.householdSize,
+        disliked_ingredients: constraints.dislikedIngredients,
+        preferred_cuisines: constraints.preferredCuisines,
+        avoided_cuisines: constraints.avoidedCuisines,
+    };
+}
 export async function fetchSuggestions(constraints: Constraints, slots: MealSlotRequest[], excludeTitles: string[] = [], context?: {
     goal: Goal;
     daily_target: Nutrition;
@@ -14,16 +26,7 @@ export async function fetchSuggestions(constraints: Constraints, slots: MealSlot
             method: "POST",
             headers: { "Content-Type": "application/json", ...await sessionHeaders() },
             body: JSON.stringify({
-                constraints: {
-                    dietary_restrictions: constraints.dietaryRestrictions,
-                    allergies: constraints.allergies,
-                    budget_tier: constraints.budgetTier,
-                    max_cook_time_minutes: constraints.maxCookTimeMinutes,
-                    household_size: constraints.householdSize,
-                    disliked_ingredients: constraints.dislikedIngredients,
-                    preferred_cuisines: constraints.preferredCuisines,
-                    avoided_cuisines: constraints.avoidedCuisines,
-                },
+                constraints: toApiConstraints(constraints),
                 slots,
                 exclude_titles: excludeTitles,
                 fitness_context: context ? { goal: context.goal, daily_target: context.daily_target } : undefined,

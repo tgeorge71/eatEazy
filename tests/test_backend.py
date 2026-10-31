@@ -94,6 +94,41 @@ class SuggestionTests(unittest.TestCase):
         self.assertEqual(context.exception.status_code,503)
 
 
+class RecipeSearchTests(unittest.TestCase):
+    def request(self, **changes):
+        return main.RecipeSearchRequest(**{"query":"chicken tacos","constraints":main.Constraints(allergies=["peanut"],household_size=3), **changes})
+
+    def output(self):
+        return {"recipes":[dict(id=str(i),title=f"Taco {i}",description="Tacos",cook_time_minutes=30,cuisine="Mexican",servings=3,tags=["quick"],ingredients=[{"name":"Chicken","quantity":"600 g"}],steps=["Cook chicken.","Assemble."],nutrition=dict(calories=400,protein_g=25,carbs_g=50,fat_g=11.1)) for i in range(4)]}
+
+    def call(self, output, req=None):
+        client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: SimpleNamespace(content=[SimpleNamespace(type="tool_use",input=output)])))
+        with patch.dict(main.os.environ, {"ANTHROPIC_API_KEY":"test-only"}), patch.object(main.anthropic,"Anthropic",return_value=client):
+            return main.recipe_search(req or self.request())
+
+    def test_valid_recipes(self):
+        result = self.call(self.output())
+        self.assertEqual(len(result.recipes),4)
+        self.assertEqual(result.recipes[0].steps[1],"Assemble.")
+
+    def test_invalid_ai_responses(self):
+        for mutate in [lambda x:x["recipes"][0].update(steps=[]), lambda x:x["recipes"][0].update(steps=[" "]), lambda x:x["recipes"][1].update(id="0"), lambda x:x["recipes"][0].update(cook_time_minutes=100), lambda x:x.update(recipes=[])]:
+            output=self.output(); mutate(output)
+            with self.assertRaises(HTTPException) as context: self.call(output)
+            self.assertEqual(context.exception.status_code,502)
+
+    def test_prompt_and_query_validation(self):
+        prompt = main.build_recipe_prompt(self.request(query="  peanut noodles  "))
+        self.assertIn('"peanut noodles"',prompt)
+        self.assertIn("Allergies: peanut",prompt)
+        self.assertIn("Household size: 3",prompt)
+        for query in ["", "   ", "x"*121]:
+            with self.assertRaises(ValidationError): self.request(query=query)
+
+    def test_missing_key(self):
+        with patch.dict(main.os.environ,{},clear=True):
+            with self.assertRaises(HTTPException) as context: main.recipe_search(self.request())
+        self.assertEqual(context.exception.status_code,503)
 
 
 class HttpRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -115,6 +150,13 @@ class HttpRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await client.post("/nutrition/targets",json={"profile":profile})).status_code,422)
             profile["override"] = dict(calories=2000,protein_g=100,carbs_g=250,fat_g=66.7)
             self.assertEqual((await client.post("/nutrition/targets",json={"profile":profile})).json()["source"],"manual")
+
+    async def test_recipe_search_requires_sign_in(self):
+        import httpx
+        main.app.dependency_overrides.clear()
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post("/recipes/search",json={"query":"tacos"})
+            self.assertIn(response.status_code,(401,403))
 
 
 if __name__ == "__main__": unittest.main()

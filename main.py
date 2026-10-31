@@ -175,13 +175,8 @@ SUGGESTIONS_TOOL = {
 }
 
 
-def build_prompt(req: SuggestionsRequest) -> str:
-    c = req.constraints
-    slot_lines = "\n".join(f"- {s.id}: {s.label}" for s in req.slots)
-    lines = [
-        "Suggest home-cooked meal options for the following meal slots:",
-        slot_lines,
-        "",
+def constraint_lines(c: Constraints) -> list[str]:
+    return [
         "Hard constraints (must never be violated):",
         f"- Allergies: {', '.join(c.allergies) or 'none'}",
         f"- Dietary restrictions: {', '.join(c.dietary_restrictions) or 'none'}",
@@ -193,6 +188,16 @@ def build_prompt(req: SuggestionsRequest) -> str:
         f"- Household size: {c.household_size}",
         f"- Preferred cuisines: {', '.join(c.preferred_cuisines) or 'no strong preference'}",
         f"- Avoided cuisines: {', '.join(c.avoided_cuisines) or 'none'}",
+    ]
+
+
+def build_prompt(req: SuggestionsRequest) -> str:
+    slot_lines = "\n".join(f"- {s.id}: {s.label}" for s in req.slots)
+    lines = [
+        "Suggest home-cooked meal options for the following meal slots:",
+        slot_lines,
+        "",
+        *constraint_lines(req.constraints),
     ]
     if req.exclude_titles:
         lines += ["", f"Do not suggest any of these (already shown/rejected): {', '.join(req.exclude_titles)}"]
@@ -266,8 +271,96 @@ def suggestions(req: SuggestionsRequest):
     except (ValidationError, ValueError, TypeError) as e:
         raise HTTPException(status_code=502, detail="AI returned an invalid meal plan. Please retry.") from e
 
+class RecipeSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=120)
+    constraints: Constraints = Constraints()
+
+    @model_validator(mode="after")
+    def strip_query(self):
+        self.query = self.query.strip()
+        if not self.query:
+            raise ValueError("Enter something to search for.")
+        return self
+
+
+class Recipe(BaseModel):
+    id: str
+    title: str
+    description: str
+    cook_time_minutes: int = Field(ge=0)
+    cuisine: str
+    servings: int = Field(ge=1)
+    tags: List[str]
+    ingredients: List[Ingredient] = Field(min_length=1)
+    steps: List[str] = Field(min_length=1)
+    nutrition: Nutrition | None = None
+
+
+class RecipeSearchResponse(BaseModel):
+    recipes: List[Recipe] = Field(min_length=1, max_length=8)
+
+
+RECIPES_TOOL = {
+    "name": "return_recipes",
+    "description": "Return home-cooking recipes matching the search, each with ingredients, steps and estimated per-serving nutrition.",
+    "input_schema": RecipeSearchResponse.model_json_schema(),
+}
+
+
+def build_recipe_prompt(req: RecipeSearchRequest) -> str:
+    return "\n".join([
+        f"Find up to 6 home-cooking recipes matching this search: {json.dumps(req.query)}",
+        "",
+        *constraint_lines(req.constraints),
+        "",
+        "Return them via the return_recipes tool. Each recipe needs a short description, a realistic cook time, "
+        "cuisine, servings equal to the household size, a few tags, ingredient quantities scaled to the household size, "
+        "concise ordered steps (without numbering prefixes), and nutrition estimated per serving.",
+        "If the search conflicts with a hard constraint, return safe adaptations instead and say so in the description.",
+    ])
+
+
+@app.post("/recipes/search", response_model=RecipeSearchResponse, dependencies=[Depends(signed_owner)])
+def recipe_search(req: RecipeSearchRequest):
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="ANTHROPIC_API_KEY is not set. Add your key to the backend .env file.",
+        )
+
+    client = anthropic.Anthropic(api_key=api_key, timeout=90.0, max_retries=1)
+
+    try:
+        message = client.messages.create(
+            model=MODEL,
+            max_tokens=12000,
+            tools=[RECIPES_TOOL],
+            tool_choice={"type": "tool", "name": "return_recipes"},
+            messages=[{"role": "user", "content": build_recipe_prompt(req)}],
+        )
+    except anthropic.APIError as e:
+        raise HTTPException(status_code=502, detail="The AI service could not find recipes. Check your backend API key, model access and connection, then retry.") from e
+
+    tool_use = next((block for block in message.content if block.type == "tool_use"), None)
+    if tool_use is None:
+        raise HTTPException(status_code=502, detail="Model did not return structured recipes.")
+
+    try:
+        result = RecipeSearchResponse(**tool_use.input)
+        if len({r.id for r in result.recipes}) != len(result.recipes):
+            raise ValueError("Recipe IDs must be unique.")
+        for recipe in result.recipes:
+            if not all(step.strip() for step in recipe.steps):
+                raise ValueError("Recipe has an empty step.")
+            if recipe.cook_time_minutes > req.constraints.max_cook_time_minutes:
+                raise ValueError("Recipe exceeds maximum cook time.")
+        return result
+    except (ValidationError, ValueError, TypeError) as e:
+        raise HTTPException(status_code=502, detail="AI returned invalid recipes. Please retry.") from e
+
 # Load after dotenv so configuration stays exclusively on the backend.
-from google_health import router as google_health_router
+from google_health import CALLBACK_CSP, router as google_health_router
 app.include_router(google_health_router)
 
 
@@ -279,5 +372,5 @@ async def protect_health_responses(request, call_next):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
         if request.url.path == "/google-health/callback":
-            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+            response.headers["Content-Security-Policy"] = CALLBACK_CSP
     return response

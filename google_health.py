@@ -1,4 +1,5 @@
 """Personal Google Health connection. Google credentials never leave the backend."""
+import base64
 import hashlib
 import json
 import math
@@ -28,6 +29,28 @@ BASE = "https://health.googleapis.com/v4/users/me"
 LOCK = threading.RLock()
 ROOT = Path(__file__).resolve().parent
 NO_CACHE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
+
+# The callback page runs under a strict CSP; only these exact inline blocks are allowed, by hash.
+CALLBACK_STYLE = ("body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+                  "background:radial-gradient(circle at 90% 5%,#F2643D88,transparent 45%),radial-gradient(circle at 0 45%,#F6B33D88,transparent 45%),"
+                  "radial-gradient(circle at 75% 100%,#5E9E6E88,transparent 50%),#FBF4EA;color:#2B1D14;font-family:-apple-system,system-ui,sans-serif}"
+                  "main{max-width:420px;padding:28px;text-align:center}h1{font-family:Georgia,serif;font-size:40px;margin:0 0 12px}p{font-size:17px;line-height:1.5;margin:0}")
+# Removes the one-time code from the address bar and history, then closes the tab the app opened.
+CALLBACK_SCRIPT = "history.replaceState(null,'',location.pathname);if(document.body.dataset.close){setTimeout(function(){window.close()},1200)}"
+
+
+def _csp_hash(source):
+    return "'sha256-" + base64.b64encode(hashlib.sha256(source.encode()).digest()).decode() + "'"
+
+
+CALLBACK_CSP = f"default-src 'none'; script-src {_csp_hash(CALLBACK_SCRIPT)}; style-src {_csp_hash(CALLBACK_STYLE)}; frame-ancestors 'none'; base-uri 'none'"
+
+
+def callback_page(title, message, status_code=200, close=False):
+    attrs = ' data-close="1"' if close else ""
+    body = f'<body{attrs}><main><h1>{title}</h1><p>{message}</p></main><script>{CALLBACK_SCRIPT}</script></body>'
+    return HTMLResponse(f"<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>eatEazy</title><style>{CALLBACK_STYLE}</style></head>{body}</html>",
+                        status_code=status_code, headers=NO_CACHE)
 
 
 def config():
@@ -268,12 +291,12 @@ def callback(state: str = "", code: str | None = None, error: str | None = None)
         with database() as db:
             pending = db.execute("SELECT * FROM pending WHERE state=?", (state,)).fetchone()
             if not pending:
-                return HTMLResponse("<p>This connection request expired or was already used. Return to eatEazy and connect again.</p>", status_code=400, headers=NO_CACHE)
+                return callback_page("Link expired", "This sign-in link expired or was already used. Return to eatEazy and try again.", 400)
             db.execute("DELETE FROM pending WHERE state=?", (state,))
         device = pending["device"]
         if error or not code:
             save_error(device, "Google connection was cancelled. You can try again.")
-            return HTMLResponse("<p>Connection cancelled. Return to eatEazy.</p>", headers=NO_CACHE)
+            return callback_page("Cancelled", "Nothing was connected. You can close this tab and return to eatEazy.")
         credentials = None
         stage = "starting authorization"
         try:
@@ -290,7 +313,7 @@ def callback(state: str = "", code: str | None = None, error: str | None = None)
             if attempt["kind"] == "login":
                 with database() as db:
                     db.execute("UPDATE devices SET identity=?, session_expires=?, error=NULL WHERE id=?", (seal(account), time.time()+7*86400, device))
-                return HTMLResponse("<p>Signed in to eatEazy. Return to the app to choose whether to connect Google Health.</p>", headers=NO_CACHE)
+                return callback_page("You're signed in", "Taking you back to eatEazy. If this tab stays open, close it and switch back to the eatEazy tab.", close=True)
             signed_owner(device)
             with database() as db:
                 current = unseal(db.execute("SELECT identity FROM devices WHERE id=?", (device,)).fetchone()["identity"])
@@ -311,8 +334,8 @@ def callback(state: str = "", code: str | None = None, error: str | None = None)
                 except HTTPException: pass
             message = exc.detail if isinstance(exc, HTTPException) else f"Google connection failed while {stage} ({type(exc).__name__}). Start a fresh sign-in and retry."
             save_error(device, message)
-            return HTMLResponse("<p>Connection was not completed. Return to eatEazy for details.</p>", status_code=400, headers=NO_CACHE)
-    return HTMLResponse("<p>Google Health connected. Return to eatEazy and choose Sync workouts.</p>", headers=NO_CACHE)
+            return callback_page("Not connected", "The connection was not completed. Return to eatEazy for details.", 400)
+    return callback_page("Google Health connected", "Taking you back to eatEazy. Choose Sync workouts there to import your sessions.", close=True)
 
 
 @router.get("/status")

@@ -64,6 +64,8 @@ class GoogleHealthTests(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get("/google-health/callback",params={"state":state,"code":"one-time-code"})
         self.assertEqual(result.status_code,200)
         self.assertNotIn("access-secret",result.text)
+        self.assertIn(health._csp_hash(health.CALLBACK_SCRIPT),result.headers.get("content-security-policy",""))
+        self.assertIn(health.CALLBACK_SCRIPT,result.text)
         self.assertTrue((await self.client.get("/google-health/status",headers=self.headers)).json()["connected"])
         self.assertEqual((await self.client.get("/google-health/callback",params={"state":state,"code":"replay"})).status_code,400)
         self.assertNotIn(b"access-secret",(self.root/".health/connections.sqlite3").read_bytes())

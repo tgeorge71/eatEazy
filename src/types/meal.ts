@@ -42,6 +42,18 @@ export type MealOption = {
     nutrition?: Nutrition;
     workoutRationale?: string;
 };
+export type Recipe = {
+    id: string;
+    title: string;
+    description: string;
+    cookTimeMinutes: number;
+    cuisine: string;
+    servings: number;
+    tags: string[];
+    ingredients: Ingredient[];
+    steps: string[];
+    nutrition?: Nutrition;
+};
 export type SlotSuggestions = {
     slotId: string;
     options: MealOption[];
