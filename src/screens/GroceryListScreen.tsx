@@ -1,9 +1,11 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Clipboard from "expo-clipboard";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
 
+import { Body, Card, Heading, PillButton, ui } from "@/components/ui";
 import { usePlan } from "@/context/PlanContext";
+import { CREAM, INK } from "@/theme";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { buildGroceryList, formatGroceryListAsText } from "@/utils/groceryList";
 
@@ -28,84 +30,46 @@ export default function GroceryListScreen({}: Props) {
   if (items.length === 0) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>Accept a meal to build your grocery list.</Text>
+        <Heading size={26} style={{ textAlign: "center" }}>Nothing on the list yet</Heading>
+        <Body fine style={{ textAlign: "center" }}>Choose a meal to build your grocery list.</Body>
       </View>
     );
   }
 
   return (
     <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {items.map((item) => (
-          <View key={item.name} style={styles.item}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            {item.entries.map((entry, i) => (
-              <Text key={i} style={styles.itemDetail}>
-                {entry.quantity} — {entry.slotLabel}
-              </Text>
-            ))}
-          </View>
-        ))}
+      <ScrollView contentContainerStyle={ui.screen}>
+        <Heading size={30}>Your groceries</Heading>
+        <Body fine>{items.length} item{items.length === 1 ? "" : "s"} for {acceptedMeals.length} meal{acceptedMeals.length === 1 ? "" : "s"}.</Body>
+        <Card style={styles.list}>
+          {items.map((item, index) => (
+            <View key={item.name} style={[styles.item, index > 0 && styles.divider]}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              {item.entries.map((entry, i) => (
+                <Text key={i} style={styles.itemDetail}>
+                  {entry.quantity} · {entry.slotLabel}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </Card>
       </ScrollView>
       <View style={styles.actions}>
-        <Pressable style={styles.actionButton} onPress={handleCopy}>
-          <Text style={styles.actionButtonText}>{copied ? "Copied!" : "Copy to clipboard"}</Text>
-        </Pressable>
-        <Pressable style={styles.actionButton} onPress={handleShare}>
-          <Text style={styles.actionButtonText}>Share</Text>
-        </Pressable>
+        <PillButton label={copied ? "Copied!" : "Copy to clipboard"} onPress={handleCopy} style={styles.action} />
+        <PillButton secondary label="Share" onPress={handleShare} style={styles.action} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  container: {
-    padding: 20,
-    gap: 16,
-    paddingBottom: 20,
-  },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  emptyText: {
-    color: "#666",
-    textAlign: "center",
-  },
-  item: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    paddingBottom: 12,
-    gap: 2,
-  },
-  itemName: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  itemDetail: {
-    fontSize: 13,
-    color: "#666",
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 20,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: "#2f6f4f",
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  actionButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
+  flex: { flex: 1 },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 8 },
+  list: { gap: 0, paddingVertical: 6 },
+  item: { paddingVertical: 12, gap: 2 },
+  divider: { borderTopWidth: 1, borderTopColor: "rgba(43,29,20,0.08)" },
+  itemName: { fontSize: 16, fontWeight: "700", color: INK, textTransform: "capitalize" },
+  itemDetail: { fontSize: 13, color: INK, opacity: 0.65 },
+  actions: { flexDirection: "row", gap: 12, padding: 16, backgroundColor: CREAM, borderTopWidth: 1, borderColor: "rgba(43,29,20,0.1)", width: "100%", maxWidth: 640, alignSelf: "center" },
+  action: { flex: 1 },
 });

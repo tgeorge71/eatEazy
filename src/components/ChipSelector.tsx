@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { INK } from "@/theme";
 
 type ChipSelectorProps = {
   options: string[];
@@ -24,8 +25,10 @@ export default function ChipSelector({ options, selected, onChange, multiple = t
         return (
           <Pressable
             key={option}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
             onPress={() => toggle(option)}
-            style={[styles.chip, isSelected && styles.chipSelected]}
+            style={({ pressed }) => [styles.chip, isSelected && styles.chipSelected, pressed && { opacity: 0.8 }]}
           >
             <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{option}</Text>
           </Pressable>
@@ -36,29 +39,9 @@ export default function ChipSelector({ options, selected, onChange, multiple = t
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    backgroundColor: "#fff",
-  },
-  chipSelected: {
-    backgroundColor: "#2f6f4f",
-    borderColor: "#2f6f4f",
-  },
-  chipText: {
-    color: "#333",
-    fontSize: 14,
-  },
-  chipTextSelected: {
-    color: "#fff",
-    fontWeight: "600",
-  },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: "rgba(43,29,20,0.15)", backgroundColor: "rgba(255,255,255,0.85)" },
+  chipSelected: { backgroundColor: INK, borderColor: INK },
+  chipText: { color: INK, fontSize: 14, fontWeight: "600", textTransform: "capitalize" },
+  chipTextSelected: { color: "#fff" },
 });

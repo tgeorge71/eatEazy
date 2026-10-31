@@ -1,9 +1,11 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchSuggestions } from "@/api/suggestions";
 import { fetchTargets } from "@/api/targets";
 import MealOptionCard from "@/components/MealOptionCard";
+import { Body, Card, Heading, PillButton, ui } from "@/components/ui";
+import { CREAM, INK } from "@/theme";
 import { useConstraints } from "@/context/ConstraintsContext";
 import { usePlan } from "@/context/PlanContext";
 import { useGoogleHealth } from "@/context/GoogleHealthContext";
@@ -147,45 +149,58 @@ export default function SuggestionScreen({ route, navigation }: Props) {
         }
     }
     if (loading)
-        return <View style={styles.center}><ActivityIndicator /><Text>Calculating targets…</Text></View>;
+        return <View style={styles.center}><ActivityIndicator color={INK}/><Body>Calculating targets…</Body></View>;
     if (error)
-        return <View style={styles.center}><Text style={styles.error}>{error}</Text><Button label="Retry" action={() => setReload(n => n + 1)}/><Button label="Edit fitness profile" action={() => navigation.navigate("Fitness")}/></View>;
+        return <View style={styles.center}><Body error style={{ textAlign: "center" }}>{error}</Body><PillButton label="Retry" onPress={() => setReload(n => n + 1)} style={styles.centerButton}/><PillButton secondary label="Edit fitness profile" onPress={() => navigation.navigate("Fitness")} style={styles.centerButton}/></View>;
     const finished = days.filter(d => !d.loading).length;
-    return <View style={{ flex: 1 }}><ScrollView contentContainerStyle={styles.container}>
-    <Text style={styles.heading}>{planType === "week" ? `Weekly progress: ${finished}/${days.length} days processed` : "Choose your meals"}</Text>
-    <Text>Nutrition is AI-estimated per serving. Totals describe planned food, not recorded consumption.</Text>
-    {targets && <Text>Daily target: {nutritionText(targets.daily)} ({targets.source})</Text>}
-    {settings.profile && <Text>{settings.workoutConsent ? "Using available manual and synced Google workout summaries." : "Workout sharing is off; using nutrition targets only."}</Text>}
+    return <View style={{ flex: 1 }}><ScrollView contentContainerStyle={ui.screen}>
+    <Heading size={30}>{planType === "week" ? `Your week · ${finished}/${days.length} days ready` : planType === "today" ? "Plan your day" : "Pick tonight's dinner"}</Heading>
+    <Card style={styles.summary}>
+      {targets && <Body><Text style={ui.label}>Daily target </Text>{nutritionText(targets.daily)} ({targets.source})</Body>}
+      {settings.profile && <Body fine>{settings.workoutConsent ? "Using available manual and synced Google workout summaries." : "Workout sharing is off; using nutrition targets only."}</Body>}
+      <Body fine>Nutrition is AI-estimated per serving. Totals describe planned food, not recorded consumption.</Body>
+    </Card>
     {days.map(day => {
             const selected = acceptedMeals.filter(m => day.slots.some(s => s.id === m.slotId));
             const total = sumSelectedNutrition(day.slots, acceptedMeals);
+            const complete = selected.length === day.slots.length;
             return <View key={day.date} style={styles.day}>
-        <Text style={styles.heading}>{day.date}</Text>
-        <Text>{selected.length}/{day.slots.length} meals selected · {selected.length === day.slots.length ? "Complete" : "Incomplete"}</Text>
-        <Text>Selected totals: {nutritionText(total)}</Text>
-        {targets && <Text>Difference from daily target: {Math.round(total.calories - targets.daily.calories)} kcal · P {Math.round(total.protein_g - targets.daily.protein_g)}g · C {Math.round(total.carbs_g - targets.daily.carbs_g)}g · F {Math.round(total.fat_g - targets.daily.fat_g)}g{planType === "tonight" ? " (dinner only; other meals are not included)" : ""}</Text>}
-        {day.loading && <View><ActivityIndicator /><Text>Finding meals for this day…</Text></View>}
-        {day.error && <><Text style={styles.error}>{day.error}</Text><Button label="Retry this day" action={() => loadDay(day, targets, generation.current)}/></>}
+        <View style={styles.dayHeader}>
+          <Heading>{day.date}</Heading>
+          <Text style={[styles.badge, complete && styles.badgeDone]}>{selected.length}/{day.slots.length} · {complete ? "Complete" : "Incomplete"}</Text>
+        </View>
+        <Body fine>Selected totals: {nutritionText(total)}</Body>
+        {targets && <Body fine>Difference from daily target: {Math.round(total.calories - targets.daily.calories)} kcal · P {Math.round(total.protein_g - targets.daily.protein_g)}g · C {Math.round(total.carbs_g - targets.daily.carbs_g)}g · F {Math.round(total.fat_g - targets.daily.fat_g)}g{planType === "tonight" ? " (dinner only; other meals are not included)" : ""}</Body>}
+        {day.loading && <View style={styles.loadingRow}><ActivityIndicator color={INK}/><Body>Finding meals for this day…</Body></View>}
+        {day.error && <><Body error>{day.error}</Body><PillButton secondary label="Retry this day" onPress={() => loadDay(day, targets, generation.current)}/></>}
         {!day.loading && !day.error && day.slots.map(slot => {
                     const state = states[slot.id];
                     if (!state)
                         return null;
                     return <View key={slot.id} style={styles.slot}>
-            <Text style={styles.heading}>{slot.label}</Text>
-            {slot.target && <Text>Meal target: {nutritionText(slot.target)}</Text>}
+            <Text style={styles.slotLabel}>{slot.label}</Text>
+            {slot.target && <Body fine>Meal target: {nutritionText(slot.target)}</Body>}
             {state.options.map(option => <MealOptionCard key={option.id} option={option} isSelected={state.acceptedId === option.id} disabled={busy.includes(slot.id)} onAccept={() => {
                                 if (busyRef.current.has(slot.id)) return; setStates(prev => ({ ...prev, [slot.id]: { ...prev[slot.id], acceptedId: option.id } })); acceptMeal(slot.id, slot.label, option); }}/>)}
-            {state.error && <Text style={styles.error}>{state.error}</Text>}
-            {!state.acceptedId && <Button label={busy.includes(slot.id) ? "Re-rolling…" : `Re-roll (${MAX_REROLLS - state.rerolls} left)`} disabled={busy.includes(slot.id) || state.rerolls >= MAX_REROLLS} action={() => reroll(slot)}/>}
+            {state.error && <Body error>{state.error}</Body>}
+            {!state.acceptedId && <PillButton secondary label={busy.includes(slot.id) ? "Re-rolling…" : `↻ Re-roll (${MAX_REROLLS - state.rerolls} left)`} disabled={busy.includes(slot.id) || state.rerolls >= MAX_REROLLS} onPress={() => reroll(slot)}/>}
           </View>;
                 })}
       </View>;
         })}
-  </ScrollView>{acceptedMeals.length > 0 && <View style={{ padding: 16 }}><Button label={`View grocery list (${acceptedMeals.length} meals)`} action={() => navigation.navigate("GroceryList")}/></View>}</View>;
+  </ScrollView>{acceptedMeals.length > 0 && <View style={styles.footer}><PillButton label={`View grocery list (${acceptedMeals.length} meal${acceptedMeals.length === 1 ? "" : "s"})`} onPress={() => navigation.navigate("GroceryList")} style={styles.footerButton}/></View>}</View>;
 }
-function Button({ label, action, disabled = false }: {
-    label: string;
-    action: () => void;
-    disabled?: boolean;
-}) { return <Pressable onPress={action} disabled={disabled} style={[styles.button, disabled && { opacity: .5 }]}><Text style={{ color: "white", textAlign: "center" }}>{label}</Text></Pressable>; }
-const styles = StyleSheet.create({ container: { padding: 20, gap: 16, paddingBottom: 40 }, center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 12 }, heading: { fontSize: 18, fontWeight: "700" }, day: { gap: 10, borderTopWidth: 1, borderColor: "#ddd", paddingTop: 14 }, slot: { gap: 12, marginVertical: 12 }, error: { color: "#b3261e" }, button: { backgroundColor: "#2f6f4f", padding: 12, borderRadius: 8 } });
+const styles = StyleSheet.create({
+    center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 12 },
+    centerButton: { alignSelf: "stretch", maxWidth: 360, width: "100%", marginHorizontal: "auto" },
+    summary: { gap: 6 },
+    day: { gap: 10, borderTopWidth: 1, borderColor: "rgba(43,29,20,0.1)", paddingTop: 16 },
+    dayHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
+    badge: { fontSize: 12, fontWeight: "700", color: INK, backgroundColor: "rgba(246,179,61,0.3)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: "hidden" },
+    badgeDone: { backgroundColor: "rgba(94,158,110,0.25)" },
+    loadingRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+    slot: { gap: 12, marginVertical: 8 },
+    slotLabel: { fontSize: 13, fontWeight: "800", color: INK, letterSpacing: 1, textTransform: "uppercase" },
+    footer: { padding: 16, backgroundColor: CREAM, borderTopWidth: 1, borderColor: "rgba(43,29,20,0.1)" },
+    footerButton: { width: "100%", maxWidth: 640, alignSelf: "center" },
+});

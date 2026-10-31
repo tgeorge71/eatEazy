@@ -4,6 +4,7 @@ import { authorizeGoogleHealth, googleHealthConfig, googleHealthStatus, DISCONNE
 import type { GoogleHealthStatus } from "@/api/googleHealth";
 import { useAuth } from "@/context/AuthContext";
 import { useGoogleHealth } from "@/context/GoogleHealthContext";
+import { INK, useDisplayFonts } from "@/theme";
 
 export default function GoogleHealthConnection() {
   const { refresh: refreshAuth } = useAuth();
@@ -14,6 +15,7 @@ export default function GoogleHealthConnection() {
   const [busy,setBusy] = useState(false);
   const [url,setUrl] = useState<string>();
   const [waiting,setWaiting] = useState(false);
+  const { display } = useDisplayFonts();
   const active = useRef(true);
   const checking = useRef(false);
   const deadline = useRef(0);
@@ -68,19 +70,40 @@ export default function GoogleHealthConnection() {
     setMessage(`Synced ${count} completed workout${count===1 ? "" : "s"} from the past seven days.`);
     const next=await googleHealthStatus(); setStatus(next);
   }
-  return <View style={styles.container}>
-    <Text style={styles.title}>Google Health</Text>
-    <Text>Connect the Google account linked to your Google Health/Fitbit app. Read-only workout access does not grant permission to share workouts with Claude; use the separate workout-sharing toggle.</Text>
-    <Text accessibilityLiveRegion="polite">{message}</Text>
+  const disconnectNow = async()=>{await disconnect();setStatus(DISCONNECTED);setWaiting(false);setUrl(undefined);deadline.current=0;setMessage("Disconnected. Google access was revoked and connection data deleted.");await refreshAuth();};
+  return <View style={styles.card}>
+    <Text accessibilityRole="header" style={[styles.title, display]}>Google Health</Text>
+    <Text style={styles.body}>Connect the Google account linked to your Google Health/Fitbit app to import completed workouts.</Text>
+    <Text accessibilityLiveRegion="polite" style={styles.status}>{message}</Text>
     {available && status.signed_in && !status.has_grant && <Button label="Connect Google Health" disabled={busy} action={()=>run(connect)}/>}
-    {url && <Button label="Continue to Google" disabled={busy} action={()=>run(async()=>{await Linking.openURL(url);})}/>}
+    {url && <Button label="Continue to Google →" disabled={busy} action={()=>run(async()=>{await Linking.openURL(url);})}/>}
     {status.connected && <Button label="Sync workouts" disabled={busy} action={()=>run(syncNow)}/>}
-    {(status.has_grant || waiting) && <Button label="Disconnect & delete connection" disabled={busy} action={()=>run(async()=>{await disconnect();setStatus(DISCONNECTED);setWaiting(false);setUrl(undefined);deadline.current=0;setMessage("Disconnected. Google access was revoked and connection data deleted.");await refreshAuth();})}/>}
-    <Button label="Check connection" disabled={busy} action={()=>run(refresh)}/>
-    {status.last_synced && <Text>Last synced: {new Date(status.last_synced).toLocaleString()}</Text>}
-    {workouts.map(w=><Text key={w.id}>{w.local_date} · {w.type} · {Math.round(w.duration_minutes)} min · completed · Google Health</Text>)}
-    <Text>Synced workouts stay in memory. Sync again after restarting the app. Future sessions still come from your manual schedule.</Text>
+    {(status.has_grant || waiting) && <Button secondary label="Disconnect & delete connection" disabled={busy} action={()=>run(disconnectNow)}/>}
+    <Button secondary label="Check connection" disabled={busy} action={()=>run(refresh)}/>
+    {status.last_synced && <Text style={styles.fine}>Last synced: {new Date(status.last_synced).toLocaleString()}</Text>}
+    {workouts.length > 0 && <View style={styles.workouts}>
+      {workouts.map(w=><Text key={w.id} style={styles.workout}>{w.local_date} · {w.type} · {Math.round(w.duration_minutes)} min</Text>)}
+    </View>}
+    <Text style={styles.fine}>Read-only access. Sharing workouts with Claude needs the separate workout-sharing toggle. Synced workouts stay in memory, so sync again after restarting the app.</Text>
   </View>;
 }
-function Button({label,action,disabled}:{label:string;action:()=>void;disabled:boolean}) { return <Pressable onPress={action} disabled={disabled} style={[styles.button,disabled&&{opacity:.5}]}><Text style={{color:"white"}}>{label}</Text></Pressable>; }
-const styles=StyleSheet.create({container:{gap:12,borderTopWidth:1,borderColor:"#ddd",paddingTop:16},title:{fontSize:18,fontWeight:"700"},button:{backgroundColor:"#2f6f4f",padding:12,borderRadius:8,alignItems:"center"}});
+function Button({label,action,disabled,secondary}:{label:string;action:()=>void;disabled:boolean;secondary?:boolean}) {
+  return <Pressable accessibilityRole="button" accessibilityState={{disabled}} onPress={action} disabled={disabled}
+    style={({pressed})=>[styles.button,secondary?styles.secondary:styles.primary,disabled&&{opacity:.5},pressed&&styles.pressed]}>
+    <Text style={[styles.buttonLabel,secondary&&{color:INK}]}>{label}</Text>
+  </Pressable>;
+}
+const styles=StyleSheet.create({
+  card:{gap:12,backgroundColor:"rgba(255,255,255,0.8)",borderRadius:20,padding:20,borderWidth:1,borderColor:"rgba(43,29,20,0.08)"},
+  title:{fontSize:24,color:INK},
+  body:{fontSize:15,lineHeight:22,color:INK,opacity:0.85},
+  status:{fontSize:14,color:INK,fontWeight:"600"},
+  button:{minHeight:50,borderRadius:999,alignItems:"center",justifyContent:"center",paddingHorizontal:20},
+  primary:{backgroundColor:INK},
+  secondary:{backgroundColor:"rgba(255,255,255,0.9)",borderWidth:1,borderColor:"rgba(43,29,20,0.12)"},
+  pressed:{opacity:0.8,transform:[{scale:0.98}]},
+  buttonLabel:{color:"white",fontSize:15,fontWeight:"700"},
+  workouts:{gap:6},
+  workout:{fontSize:14,color:INK,backgroundColor:"rgba(94,158,110,0.15)",borderRadius:12,paddingHorizontal:12,paddingVertical:8,overflow:"hidden"},
+  fine:{fontSize:12,color:INK,opacity:0.6,lineHeight:17},
+});

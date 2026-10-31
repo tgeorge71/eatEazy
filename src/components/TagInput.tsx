@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ThemedInput } from "@/components/ui";
+import { INK } from "@/theme";
 
 type TagInputProps = {
   tags: string[];
@@ -26,47 +28,26 @@ export default function TagInput({ tags, onChange, placeholder }: TagInputProps)
     <View>
       <View style={styles.row}>
         {tags.map((tag) => (
-          <Pressable key={tag} onPress={() => removeTag(tag)} style={styles.chip}>
+          <Pressable key={tag} accessibilityRole="button" accessibilityLabel={`Remove ${tag}`} onPress={() => removeTag(tag)} style={styles.chip}>
             <Text style={styles.chipText}>{tag} ✕</Text>
           </Pressable>
         ))}
       </View>
-      <TextInput
+      <ThemedInput
         value={draft}
         onChangeText={setDraft}
         onSubmitEditing={addTag}
         onBlur={addTag}
         placeholder={placeholder}
         returnKeyType="done"
-        style={styles.input}
+        accessibilityLabel={placeholder}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
-  },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: "#eee",
-  },
-  chipText: {
-    color: "#333",
-    fontSize: 14,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    fontSize: 14,
-  },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+  chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "rgba(246,179,61,0.3)" },
+  chipText: { color: INK, fontSize: 14, fontWeight: "600" },
 });

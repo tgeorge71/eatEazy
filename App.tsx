@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,18 +8,17 @@ import { FitnessProvider } from "./src/context/FitnessContext";
 import { PlanProvider } from "./src/context/PlanContext";
 import RootNavigator from "./src/navigation/RootNavigator";
 import LoginScreen from "./src/screens/LoginScreen";
-import AccountScreen from "./src/screens/AccountScreen";
+import { CREAM } from "./src/components/BlobBackground";
 function SignedInApp() {
   const { user, loaded } = useAuth();
-  if (!loaded) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><Text>Checking sign-in…</Text></View>;
+  if (!loaded) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: CREAM }}><Text>Checking sign-in…</Text></View>;
   if (!user) return <LoginScreen />;
   return <AccountApp key={user.sub} accountId={user.sub} />;
 }
 function AccountApp({ accountId }: { accountId: string }) {
-  const [ready, setReady] = useState(false);
   return <ConstraintsProvider accountId={accountId}>
     <GoogleHealthProvider><FitnessProvider accountId={accountId}><PlanProvider>
-      {ready ? <RootNavigator /> : <AccountScreen onContinue={() => setReady(true)} />}
+      <RootNavigator />
     </PlanProvider></FitnessProvider></GoogleHealthProvider>
   </ConstraintsProvider>;
 }
