@@ -16,23 +16,24 @@ type ConstraintsContextValue = {
 
 const ConstraintsContext = createContext<ConstraintsContextValue | null>(null);
 
-export function ConstraintsProvider({ children }: { children: ReactNode }) {
+export function ConstraintsProvider({ children, accountId }: { children: ReactNode; accountId: string }) {
+  const storageKey = `${STORAGE_KEY}.${accountId}`;
   const [constraints, setConstraints] = useState<Constraints>(DEFAULT_CONSTRAINTS);
   const [hasConstraints, setHasConstraints] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+    AsyncStorage.getItem(storageKey).then((raw) => {
       if (raw) {
         setConstraints(JSON.parse(raw));
         setHasConstraints(true);
       }
       setIsLoaded(true);
     });
-  }, []);
+  }, [storageKey]);
 
   async function saveConstraints(next: Constraints) {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(storageKey, JSON.stringify(next));
     setConstraints(next);
     setHasConstraints(true);
   }

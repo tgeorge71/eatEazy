@@ -40,3 +40,7 @@ yarn-error.*
 # IDE
 .vscode/
 .idea/
+
+# Google OAuth credentials and encrypted health token database
+client_secret*.json
+.health/

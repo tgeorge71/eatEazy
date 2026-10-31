@@ -4,6 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import ChipSelector from "@/components/ChipSelector";
 import TagInput from "@/components/TagInput";
+import { Body, Card, Field, Heading, PillButton, ui } from "@/components/ui";
+import { INK } from "@/theme";
 import { useConstraints } from "@/context/ConstraintsContext";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import type { BudgetTier, Constraints } from "@/types/meal";
@@ -41,145 +43,81 @@ export default function ConstraintSetupScreen({ navigation }: Props) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Field label="Dietary restrictions">
-        <TagInput
-          tags={form.dietaryRestrictions}
-          onChange={(v) => update("dietaryRestrictions", v)}
-          placeholder="e.g. vegetarian, gluten-free"
-        />
-      </Field>
+    <ScrollView contentContainerStyle={ui.screen}>
+      <Body fine>Set these once. Recipes and meal plans always respect your allergies, diet and cook time.</Body>
 
-      <Field label="Allergies">
-        <TagInput
-          tags={form.allergies}
-          onChange={(v) => update("allergies", v)}
-          placeholder="e.g. peanuts, shellfish"
-        />
-      </Field>
+      <Card>
+        <Heading>Diet & allergies</Heading>
+        <Field label="Dietary restrictions">
+          <TagInput tags={form.dietaryRestrictions} onChange={(v) => update("dietaryRestrictions", v)} placeholder="e.g. vegetarian, gluten-free" />
+        </Field>
+        <Field label="Allergies">
+          <TagInput tags={form.allergies} onChange={(v) => update("allergies", v)} placeholder="e.g. peanuts, shellfish" />
+        </Field>
+        <Field label="Disliked ingredients">
+          <TagInput tags={form.dislikedIngredients} onChange={(v) => update("dislikedIngredients", v)} placeholder="e.g. cilantro, mushrooms" />
+        </Field>
+      </Card>
 
-      <Field label="Disliked ingredients">
-        <TagInput
-          tags={form.dislikedIngredients}
-          onChange={(v) => update("dislikedIngredients", v)}
-          placeholder="e.g. cilantro, mushrooms"
-        />
-      </Field>
+      <Card>
+        <Heading>Budget & time</Heading>
+        <Field label="Budget tier">
+          <ChipSelector
+            options={BUDGET_TIERS}
+            selected={[form.budgetTier]}
+            multiple={false}
+            onChange={(v) => update("budgetTier", (v[0] as BudgetTier) ?? form.budgetTier)}
+          />
+        </Field>
+        <Field label="Max cook time (minutes)">
+          <ChipSelector
+            options={COOK_TIME_OPTIONS}
+            selected={[String(form.maxCookTimeMinutes)]}
+            multiple={false}
+            onChange={(v) => update("maxCookTimeMinutes", Number(v[0] ?? form.maxCookTimeMinutes))}
+          />
+        </Field>
+        <Field label="Household size">
+          <View style={styles.stepper}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Fewer people"
+              style={({ pressed }) => [styles.stepperButton, pressed && ui.pressed]}
+              onPress={() => update("householdSize", Math.max(1, form.householdSize - 1))}
+            >
+              <Text style={styles.stepperButtonText}>−</Text>
+            </Pressable>
+            <Text accessibilityLiveRegion="polite" style={styles.stepperValue}>{form.householdSize}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="More people"
+              style={({ pressed }) => [styles.stepperButton, pressed && ui.pressed]}
+              onPress={() => update("householdSize", form.householdSize + 1)}
+            >
+              <Text style={styles.stepperButtonText}>+</Text>
+            </Pressable>
+          </View>
+        </Field>
+      </Card>
 
-      <Field label="Budget tier">
-        <ChipSelector
-          options={BUDGET_TIERS}
-          selected={[form.budgetTier]}
-          multiple={false}
-          onChange={(v) => update("budgetTier", (v[0] as BudgetTier) ?? form.budgetTier)}
-        />
-      </Field>
+      <Card>
+        <Heading>Cuisines</Heading>
+        <Field label="Preferred cuisines">
+          <ChipSelector options={CUISINE_OPTIONS} selected={form.preferredCuisines} onChange={(v) => update("preferredCuisines", v)} />
+        </Field>
+        <Field label="Cuisines to avoid">
+          <ChipSelector options={CUISINE_OPTIONS} selected={form.avoidedCuisines} onChange={(v) => update("avoidedCuisines", v)} />
+        </Field>
+      </Card>
 
-      <Field label="Max cook time (minutes)">
-        <ChipSelector
-          options={COOK_TIME_OPTIONS}
-          selected={[String(form.maxCookTimeMinutes)]}
-          multiple={false}
-          onChange={(v) => update("maxCookTimeMinutes", Number(v[0] ?? form.maxCookTimeMinutes))}
-        />
-      </Field>
-
-      <Field label="Household size">
-        <View style={styles.stepper}>
-          <Pressable
-            style={styles.stepperButton}
-            onPress={() => update("householdSize", Math.max(1, form.householdSize - 1))}
-          >
-            <Text style={styles.stepperButtonText}>−</Text>
-          </Pressable>
-          <Text style={styles.stepperValue}>{form.householdSize}</Text>
-          <Pressable
-            style={styles.stepperButton}
-            onPress={() => update("householdSize", form.householdSize + 1)}
-          >
-            <Text style={styles.stepperButtonText}>+</Text>
-          </Pressable>
-        </View>
-      </Field>
-
-      <Field label="Preferred cuisines">
-        <ChipSelector
-          options={CUISINE_OPTIONS}
-          selected={form.preferredCuisines}
-          onChange={(v) => update("preferredCuisines", v)}
-        />
-      </Field>
-
-      <Field label="Cuisines to avoid">
-        <ChipSelector
-          options={CUISINE_OPTIONS}
-          selected={form.avoidedCuisines}
-          onChange={(v) => update("avoidedCuisines", v)}
-        />
-      </Field>
-
-      <Pressable style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Save</Text>
-      </Pressable>
+      <PillButton label="Save preferences" onPress={handleSave} />
     </ScrollView>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    gap: 20,
-  },
-  field: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  stepperButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#eee",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepperButtonText: {
-    fontSize: 20,
-    fontWeight: "600",
-  },
-  stepperValue: {
-    fontSize: 18,
-    fontWeight: "600",
-    minWidth: 24,
-    textAlign: "center",
-  },
-  saveButton: {
-    backgroundColor: "#2f6f4f",
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  stepper: { flexDirection: "row", alignItems: "center", gap: 18 },
+  stepperButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: INK, alignItems: "center", justifyContent: "center" },
+  stepperButtonText: { fontSize: 22, fontWeight: "700", color: "white" },
+  stepperValue: { fontSize: 22, fontWeight: "800", minWidth: 28, textAlign: "center", color: INK },
 });
