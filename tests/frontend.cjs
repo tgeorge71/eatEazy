@@ -1,0 +1,48 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const ts = require('typescript');
+const cache = new Map();
+function load(file) {
+  file = path.resolve(file);
+  if (cache.has(file)) return cache.get(file);
+  const module = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+  const localRequire = name => name === "@/api/googleHealth" ? { sessionHeaders: async () => ({Authorization: "Bearer test-session"}) } : load(name.startsWith('@/') ? `src/${name.slice(2)}.ts` : path.resolve(path.dirname(file), `${name}.ts`));
+  new Function('require','module','exports',code)(localRequire,module,module.exports);
+  cache.set(file,module.exports); return module.exports;
+}
+(async()=> {
+  const fitness = load('src/health/fitness.ts');
+  const planning = load('src/health/planning.ts');
+  const grocery = load('src/utils/groceryList.ts');
+  const today = new Date(2026,11,29,23,30);
+  assert.deepEqual(fitness.upcomingDates(7,today), ['2026-12-29','2026-12-30','2026-12-31','2027-01-01','2027-01-02','2027-01-03','2027-01-04']);
+  assert.equal(fitness.convertMeasurements(70,180,true).height_cm,177.8);
+  assert.ok(Math.abs(fitness.convertMeasurements(70,180,true).weight_kg-81.6466)<.001);
+  const target = { calories:400,protein_g:25,carbs_g:50,fat_g:11.1 };
+  const targets = {daily:target,meals:{dinner:target},source:'manual'};
+  const slots = planning.buildPlanSlots('week',targets,true,today);
+  assert.equal(slots.length,28); assert.equal(new Set(slots.map(s=>s.id)).size,28);
+  assert.equal(planning.buildPlanSlots('week',targets,false,today).length,21);
+  assert.equal(planning.buildPlanSlots('tonight',targets,true,today)[0].target,target);
+  const meals=slots.slice(0,4).map(s=>({slotId:s.id,slotLabel:s.label,meal:{nutrition:target,ingredients:[{name:' Rice ',quantity:'3 cups'}]}}));
+  assert.equal(planning.sumSelectedNutrition(slots.slice(0,4),meals).calories,1600);
+  assert.equal(planning.sumSelectedNutrition(slots.slice(4,8),meals).calories,0);
+  assert.equal(grocery.buildGroceryList(meals)[0].entries.length,4);
+  const workouts=[{local_date:'2026-12-29',status:'planned'},{local_date:'2026-12-30',status:'completed'}];
+  assert.equal((await fitness.manualWorkoutProvider(workouts).read(['2026-12-29']))[0].status,'planned');
+  assert.deepEqual(await fitness.manualWorkoutProvider(workouts).read(['2027-01-01']),[]);
+  const api=load('src/api/suggestions.ts');
+  const constraints=load('src/types/meal.ts').DEFAULT_CONSTRAINTS;
+  let sent;
+  global.fetch=async (url,options)=>{sent=JSON.parse(options.body);return {ok:true,json:async()=>({slots:[{slot_id:'dinner',options:[{id:'1',title:'Rice',description:'test',cook_time_minutes:20,cuisine:'test',tags:[],ingredients:[],nutrition:target,workout_rationale:'Recovery'}]}]})};};
+  const results=await api.fetchSuggestions(constraints,[{id:'dinner',label:'Dinner'}],[],{goal:'balanced',daily_target:target,workouts,consent:false});
+  assert.deepEqual(sent.workouts,[]); assert.equal(sent.workout_consent,false);
+  assert.equal(results[0].options[0].nutrition.calories,400);
+  await api.fetchSuggestions(constraints,[{id:'dinner',label:'Dinner'}],[],{goal:'balanced',daily_target:target,workouts,consent:true});
+  assert.equal(sent.workouts.length,2);
+  global.fetch=async()=>{throw new Error('offline');};
+  await assert.rejects(()=>api.fetchSuggestions(constraints,[]),/Cannot reach the backend/);
+  console.log('Frontend checks passed: units, dates, slots, totals, grocery lists, provider and consent.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
